@@ -1,0 +1,1 @@
+(cd ..; chmod -R 700 rt; cd rt; g++ RayTracer.cpp; ./a.out > image.ppm; python3 convert.py)
