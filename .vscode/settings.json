@@ -1,0 +1,8 @@
+{
+    "c-cpp-compile-run.cpp-flags": "-w",
+    "c-cpp-compile-run.cpp-compiler": "clang++",
+    "C_Cpp.default.compilerPath": "",
+    "C_Cpp.legacyCompilerArgsBehavior": true,
+    "c-cpp-compile-run.c-compiler": "clang++",
+    "c-cpp-compile-run.c-flags": "-w"
+}
