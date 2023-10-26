@@ -17,9 +17,9 @@
 
 // Image Parameters
 const auto aspect_ratio = 16.0 / 9;
-const int image_width = 1280;
+const int image_width = 720;
 const int image_height = static_cast<int>( image_width / aspect_ratio );
-const int samples_per_pixel = 500;
+const int samples_per_pixel = 5000;
 const int max_depth = 10;
 
 const int defaultThreads = 4;
@@ -79,6 +79,7 @@ int main(int argc, char* argv[]) {
     SDL_Event event;
     Uint32 starting_tick;
 	bool running = true;
+    bool complete = false;
     int count = 0;
 
     while (running) {
@@ -94,17 +95,24 @@ int main(int argc, char* argv[]) {
 
         int i = rand() % image_width;
         int j = rand() % image_height;
-        if (is_rendered.s[i][image_height-j] == false) 
-        {
-            render_pixel(renderer, i,j,world,cam);
-            is_rendered.s[i][image_height-j] = true;
-        }
 
-        if (count % 2000 == 0)
+        if (complete == false)
         {
+            for (int j = 0; j < image_height; j++)
+            {
+                for (int i = 0; i < image_width; i++)
+                {
+                    render_pixel(renderer, i,image_height-j,world,cam);
+
+                    if (i == image_width-1 && j == image_height-1)
+                    {
+                        complete = true;
+                    }
+                }
+                std::cout << j << " ";
+            }
             SDL_RenderPresent(renderer);
         }
-        count++;
     }
     return 0;
 }
