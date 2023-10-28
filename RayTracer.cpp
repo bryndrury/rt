@@ -2,12 +2,31 @@
 
 #include <iostream>
 #include <fstream>
+#include <thread>
+#include <ctime>
+#include <stdlib.h>
+#include <SDL2/SDL.h>
+
+#include <omp.h>
 
 #include "limits.h"
 #include "color.h"
 #include "hittable_list.h"
 #include "sphere.h"
 #include "camera.h"
+
+// Image Parameters
+const auto aspect_ratio = 16.0 / 9;
+const int image_width = 720;
+const int image_height = static_cast<int>( image_width / aspect_ratio );
+const int samples_per_pixel = 5000;
+const int max_depth = 10;
+
+const int defaultThreads = 4;
+
+
+// int render_pixel(int i,int j, hittable_list world, camera cam);
+int render_pixel(SDL_Renderer* renderer , int i,int j, hittable_list world, camera cam);
 
 color ray_color(const ray& r, const hittable& world, int depth) {
     hit_record rec;
@@ -25,76 +44,108 @@ color ray_color(const ray& r, const hittable& world, int depth) {
     return ( 1.0 - t ) * color(1.0, 1.0, 1.0) + t * color(0.5, 0.7, 1.0);
 }
 
-int main() {
+struct screen {
+        // bool array of pixels that have been rendered or not
+        // if renderer is true, then the pixel has been rendered
+        bool s[image_width][image_height];
+};
 
+int main(int argc, char* argv[]) {
+    omp_set_num_threads(defaultThreads);
 
-    // Image Parameters
-    const auto aspect_ratio = 16.0 / 9;
-    const int image_width = 1280;
-    const int image_height = static_cast<int>( image_width / aspect_ratio );
-    const int samples_per_pixel = 1000;
-    const int max_depth = 5;
+    screen is_rendered;
 
-    // Screen
-    struct screen{
-        int s[image_width][image_height][3] = { 0 };
-    } screen;
+    // Create Window
+	SDL_Init( SDL_INIT_VIDEO );
+	SDL_Window* window = NULL;
+	SDL_Renderer* renderer = NULL;
+    
+    // Render Black Screen
+	window = SDL_CreateWindow("RayTracer", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, image_width, image_height, SDL_WINDOW_SHOWN);
+	renderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED);
 
-    //screen.s[0][0][0]
-
+	SDL_SetRenderDrawColor( renderer, 0, 0, 0, 255 );
+	SDL_RenderClear( renderer );
+    SDL_RenderPresent( renderer );
 
     // World
     hittable_list world;
     world.add( make_shared<sphere>( point3(0, 0, -1), 0.5 ) );
     world.add( make_shared<sphere>( point3(0, -100.5, -1), 100 ) );
 
-
     // Camera Parameters
     camera cam;
 
-    // Renderer
-    std::cout << "P3\n" << image_width << ' ' << image_height << "\n255\n";
+    SDL_Event event;
+    Uint32 starting_tick;
+	bool running = true;
+    bool complete = false;
+    int count = 0;
 
-    for (int j = image_height - 1; j >= 0 ; j--)
-    {
-        std::cerr << "\rScanlines remaining: " << j << ' ' << std::flush;
-        for (int i = 0; i < image_width; i++)
+    while (running) {
+		starting_tick = SDL_GetTicks();
+
+		while (SDL_PollEvent(&event)) {
+			if (event.type == SDL_QUIT) {
+				running = false;
+				SDL_Quit();
+				break;
+			}
+		}
+
+        int i = rand() % image_width;
+        int j = rand() % image_height;
+
+        if (complete == false)
         {
-            color pixel_color(0, 0, 0);
+            for (int j = 0; j < image_height; j++)
+            {
+                for (int i = 0; i < image_width; i++)
+                {
+                    render_pixel(renderer, i,image_height-j,world,cam);
 
-            for (int s = 0; s < samples_per_pixel; s++) {
-                auto u = (i + random_double()) / (image_width - 1);
-                auto v = (j + random_double()) / (image_height - 1);
-                ray r = cam.get_ray(u, v);
-                pixel_color += ray_color(r, world, max_depth);
+                    if (i == image_width-1 && j == image_height-1)
+                    {
+                        complete = true;
+                    }
+                }
+                std::cout << j << " ";
             }
-            //write_color(std::cout, pixel_color, samples_per_pixel);
-
-            // Save to screen struct
-            auto r = pixel_color.x();
-            auto g = pixel_color.y();
-            auto b = pixel_color.z();
-
-            // Divide the color by the number of samples and gamma correct.
-            auto scale = 1.0 / samples_per_pixel;
-            r = sqrt(scale * r);
-            g = sqrt(scale * g);
-            b = sqrt(scale * b);
-
-            // Write the translated [0, 255] value of each clor component.
-            screen.s[i][j][0] = static_cast<int>(255.999 * clamp(r, 0.0, 0.999));
-            screen.s[i][j][1] = static_cast<int>(255.999 * clamp(g, 0.0, 0.999));
-            screen.s[i][j][2] = static_cast<int>(255.999 * clamp(b, 0.0, 0.999));
+            SDL_RenderPresent(renderer);
         }
     }
-
-    for (int j = image_height - 1; j >= 0 ; j--) {
-        for (int i = 0; i < image_width; i++) {
-            std::cout << screen.s[i][j][0] << ' '
-                      << screen.s[i][j][1] << ' '
-                      << screen.s[i][j][2] << '\n';
-        };
-    };
-
-    std::cerr << "\nDone." << std::endl;
+    return 0;
 }
+
+
+int render_pixel(SDL_Renderer* renderer , int i,int j, hittable_list world, camera cam) {
+    color pixel_color(0, 0, 0);
+
+    for (int s = 0; s < samples_per_pixel; s++) {
+        auto u = (i + random_double()) / (image_width - 1);
+        auto v = (j + random_double()) / (image_height - 1);
+        ray r = cam.get_ray(u, v);
+        pixel_color += ray_color(r, world, max_depth);
+    }
+    //write_color(std::cout, pixel_color, samples_per_pixel);
+
+    // Save to screen struct
+    auto r = pixel_color.x();
+    auto g = pixel_color.y();
+    auto b = pixel_color.z();
+
+    // Divide the color by the number of samples and gamma correct.
+    auto scale = 1.0 / samples_per_pixel;
+    r = sqrt(scale * r);
+    g = sqrt(scale * g);
+    b = sqrt(scale * b);
+
+    r = static_cast<int>(255.999 * clamp(r, 0.0, 0.999));
+    g = static_cast<int>(255.999 * clamp(g, 0.0, 0.999));
+    b = static_cast<int>(255.999 * clamp(b, 0.0, 0.999));
+
+    SDL_SetRenderDrawColor( renderer, r, g, b, 255 );
+    SDL_RenderDrawPoint(renderer, i, image_height - j);
+    return 0;
+}
+
